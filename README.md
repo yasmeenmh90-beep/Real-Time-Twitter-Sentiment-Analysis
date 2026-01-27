@@ -28,7 +28,7 @@ The pipeline consists of the following components:
 ![Dashboard Main](Dashboard1_main.png)
 
 ### Live Tweet Streaming Table
-![Live Tweets](Live Tweets.png)
+![Live Tweets](Live_Tweets.png)
 
 ### Real-Time Sentiment Trend Graph
 ![Sentiment Trend](Sentiment_trend.png)
