@@ -10,16 +10,6 @@ University of West London
 ## Project Overview
 This research project designs and implements an end-to-end real-time sentiment analysis pipeline deployed on AWS EC2. The system integrates data ingestion, processing, storage, machine learning models, and visualization components in a scalable architecture.
 
-## System Architecture Diagram
-
-![Architecture Diagram](architecture.png)
-
-
-
-
-
-
-
 ## System Architecture
 The pipeline consists of the following components:
 - Twitter/X Scraper (Playwright)
@@ -27,6 +17,13 @@ The pipeline consists of the following components:
 - Apache Spark Structured Streaming for data processing and ML inference
 - MongoDB Atlas for storage
 - Django + WebSocket (ASGI) for real-time dashboard visualization
+
+
+![Architecture Diagram](architecture.png)
+
+
+
+  
 
 ## Technologies Used
 - Python
