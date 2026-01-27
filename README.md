@@ -19,7 +19,7 @@ The pipeline consists of the following components:
 - Django + WebSocket (ASGI) for real-time dashboard visualization
 
 
-![Architecture Diagram](architecture.png)
+![Architecture Diagram](artitecture.png)
 
 
 
