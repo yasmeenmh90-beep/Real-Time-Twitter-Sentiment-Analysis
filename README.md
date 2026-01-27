@@ -21,8 +21,28 @@ The pipeline consists of the following components:
 
 ![Architecture Diagram](artitecture.png)
 
+## Real-Time Dashboard Demo
 
+### Live Sentiment KPIs
+![Dashboard Main](Dashboard_main.png)
+![Dashboard Main](Dashboard1_main.png)
 
+### Live Tweet Streaming Table
+![Live Tweets](Live_tweets.png)
+
+### Real-Time Sentiment Trend Graph
+![Sentiment Trend](Sentiment_trend.png)
+
+### Language Distribution & Trending Hashtags
+![Languages Chart](Language_chart.png)
+
+### Tweet Volume Forecasting Module
+![Forecast](Forecast.png)
+![Forecast](forecast2.png)
+
+### Historical Tweet Explorer
+![History](History.png)
+![History](History1.png)
   
 
 ## Technologies Used
