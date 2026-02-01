@@ -1,0 +1,24 @@
+{
+  "name": "twitter_scraper",
+  "version": "1.0.0",
+  "type": "module",
+  "private": true,
+  "engines": {
+    "node": ">=18.17"
+  },
+  "scripts": {
+    "login": "node manual_login.js",
+    "scrape": "node scrape.js",
+    "check": "node --check scrape.js",
+    "postinstall": "npx playwright install --with-deps chromium"
+  },
+  "dependencies": {
+    "@aws-sdk/client-s3": "^3.864.0",
+    "@aws-sdk/credential-provider-node": "^3.864.0",
+    "aws-msk-iam-sasl-signer-js": "^1.0.1",
+    "dotenv": "^17.2.1",
+    "ioredis": "^5.7.0",
+    "kafkajs": "^2.2.4",
+    "playwright": "^1.54.2"
+  }
+}
