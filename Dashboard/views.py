@@ -20,7 +20,8 @@ from django.views.decorators.cache import cache_page
 # Atlas collections yahan se aayengi
 from dashboard.mongo_utils import coll_latest, coll_history
 
-MONGO_URI_BASE="mongodb+srv://Yasmeen_mh:wJ2uJZgY4dr3trXi@cluster1.myhxac.mongodb.net"
+MONGO_URI = os.getenv("MONGO_URI")
+
 MONGO_DB="twitter_rt"
 MONGO_COLL="scored_tweets"
 
