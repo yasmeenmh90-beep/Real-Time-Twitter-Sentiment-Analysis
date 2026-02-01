@@ -19,30 +19,28 @@ The pipeline consists of the following components:
 - Django + WebSocket (ASGI) for real-time dashboard visualization
 
 
-![Architecture Diagram](artitecture.png)
-
 ## Real-Time Dashboard Demo
 
 ### Live Sentiment KPIs
-
-![Dashboard Main](docs/screenshots/Dashboard1_main.png)
+![Dashboard Main](docs/screenshots/Dashboard_main.png)
 
 ### Live Tweet Streaming Table
-![Live Tweets](Live_Tweets.png)
+![Live Tweets](docs/screenshots/Live_Tweets.png)
 
 ### Real-Time Sentiment Trend Graph
-![Sentiment Trend](Sentiment_trend.png)
+![Sentiment Trend](docs/screenshots/Sentiment_trend.png)
 
 ### Language Distribution & Trending Hashtags
-![Languages Chart](Language_chart.png)
+![Languages Chart](docs/screenshots/Language_chart.png)
 
 ### Tweet Volume Forecasting Module
-![Forecast](Forecast.png)
-![Forecast](forecast2.png)
+![Forecast](docs/screenshots/Forecast.png)
+![Forecast](docs/screenshots/forecast2.png)
 
 ### Historical Tweet Explorer
-![History](History.png)
-![History](History1.png)
+![History](docs/screenshots/History.png)
+![History](docs/screenshots/History1.png)
+
   
 
 ## Technologies Used
