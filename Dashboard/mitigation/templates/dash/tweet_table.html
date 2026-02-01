@@ -1,0 +1,41 @@
+<!-- templates/dashboard_frontend/partials/tweet_table.html -->
+<div class="card shadow-sm">
+  <div class="card-body p-0">
+    <div class="table-responsive">
+      <table class="table table-sm table-hover align-middle mb-0">
+        <thead class="table-light sticky-top">
+          <tr>
+            <th>Time</th>
+            <th>User</th>
+            <th>Text</th>
+            <th>Sentiment</th>
+            {% if mode == 'trending' %}
+              <th class="text-end">Engagement</th>
+            {% endif %}
+          </tr>
+        </thead>
+        <tbody>
+          {% for t in tweets %}
+          <tr>
+            <td>{{ t.created_at|date:"Y-m-d H:i:s" }}</td>
+            <td>{{ t.user }}</td>
+            <td class="text-truncate" style="max-width:32rem;">{{ t.processed_text }}</td>
+            <td>
+              <span class="badge text-bg-{% if t.sentiment == 'positive' %}success{% elif t.sentiment == 'negative' %}danger{% else %}secondary{% endif %}">
+                {{ t.sentiment }}
+              </span>
+            </td>
+            {% if mode == 'trending' %}
+              <td class="text-end">{{ t.engagement_score }}</td>
+            {% endif %}
+          </tr>
+          {% empty %}
+          <tr>
+            <td colspan="5" class="text-center text-muted py-4">No tweets found.</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
