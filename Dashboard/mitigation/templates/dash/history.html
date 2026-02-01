@@ -1,0 +1,209 @@
+{% extends "dashboard_frontend/base.html" %}
+{% load static %}
+
+{% block title %}Tweet History{% endblock %}
+
+{% block content %}
+<div class="pt-5 px-4">  <!-- 👈 Adds space below fixed topbar -->
+  <h1 class="mb-4">Tweet History</h1>
+<!-- ── Filter by Sentiment & Time ──────────────────────────────── -->
+<form class="d-flex gap-2 flex-wrap align-items-center mb-3" method="get">
+  <!-- Sentiment Filter -->
+  <select name="sentiment" class="form-select form-select-sm" style="width: auto;">
+    <option value="">All Sentiments</option>
+    <option value="pos" {% if request.GET.sentiment == 'pos' %}selected{% endif %}>Positive 😊</option>
+    <option value="neu" {% if request.GET.sentiment == 'neu' %}selected{% endif %}>Neutral 😐</option>
+    <option value="neg" {% if request.GET.sentiment == 'neg' %}selected{% endif %}>Negative 😡</option>
+  </select>
+
+   <select id="filterCategory" class="form-select form-select-sm w-auto">
+    <option value="all">All Categories</option>
+    <option value="political">🏛️ Political</option>
+    <option value="crisis">⚠️ Crisis Mgmt</option>
+    <option value="economy">📘 Economy</option>
+    <option value="social">💬 Social Trends</option>
+    <option value="business">💼 Business</option>
+    <option value="global">🌍 Global Events</option>
+  </select>
+
+  <!-- Time Filter -->
+  <select name="mode" class="form-select form-select-sm" style="width: auto;">
+    <option value="day" {% if mode == 'day' %}selected{% endif %}>Today</option>
+    <option value="week" {% if mode == 'week' %}selected{% endif %}>Last 7 Days</option>
+  </select>
+
+  <!-- Page Size Selector -->
+  <select name="page_size" class="form-select form-select-sm" style="width: auto;">
+    <option value="20" {% if request.GET.page_size == '20' %}selected{% endif %}>20 per page</option>
+    <option value="50" {% if request.GET.page_size == '50' or not request.GET.page_size %}selected{% endif %}>50 per page</option>
+    <option value="100" {% if request.GET.page_size == '100' %}selected{% endif %}>100 per page</option>
+  </select>
+
+  <button type="submit" class="btn btn-sm btn-outline-primary">Apply</button>
+</form>
+
+<!-- ── Tweet Table + Pagination Wrapper ────────────────────────── -->
+<div id="tweet-table-section">
+  <div class="card shadow-sm">
+    <div class="card-header fw-semibold">Tweets ({{ mode }})</div>
+    <div class="table-responsive" style="max-height:60vh">
+      <table class="table table-sm table-hover align-middle mb-0">
+        <thead class="table-light sticky-top">
+          <tr>
+            <th>Time</th>
+<th>Tweet ID</th>
+<th>User</th>
+<th>Text</th> <!-- ✅ Add this -->
+<th>Processed Text</th>
+<th>VADER Score</th>
+<th>Sentiment</th>
+<th>Sentiment Label</th>
+<th>Text Length</th>
+<th>Word Count</th>
+<th>Char Density</th>
+<th>Capital Words</th>
+<th>Negations</th>
+<th>Emojis</th>
+<th>Is Question</th>
+<th>Has Mentions</th>
+<th>Has Hashtags</th>
+<th>Has Links</th>
+
+          </tr>
+        </thead>
+        <tbody>
+          {% for tweet in tweets %}
+            <tr class="{% if tweet.sentiment == 'neg' %}bg-danger-subtle{% elif tweet.sentiment == 'neu' %}bg-secondary-subtle{% elif tweet.sentiment == 'pos' %}bg-success-subtle{% endif %}">
+  <td>{{ tweet.created_at }}</td>
+  <td class="text-monospace">{{ tweet.ids }}</td>
+  <td>
+    <img src="https://api.dicebear.com/7.x/initials/svg?seed={{ tweet.user|urlencode }}"
+         alt="Avatar" width="28" height="28" class="rounded-circle me-1" />
+    {{ tweet.user }}
+  </td>
+  <td class="text-truncate" style="max-width:30rem;">{{ tweet.text|default:"–" }}</td> <!-- ✅ Full text -->
+  <td class="text-truncate" style="max-width:30rem;">{{ tweet.processed_text|default:"–" }}</td>
+  <td>{{ tweet.vader_score|default:"–" }}</td>
+  <td>
+    {% if tweet.sentiment == 'pos' %}
+      <span class="badge bg-success">pos</span>
+    {% elif tweet.sentiment == 'neu' %}
+      <span class="badge bg-secondary">neu</span>
+    {% elif tweet.sentiment == 'neg' %}
+      <span class="badge bg-danger">neg</span>
+    {% else %}
+      <span class="badge bg-light text-muted">unknown</span>
+    {% endif %}
+  </td>
+  <td>{{ tweet.sentiment_label|default:"–" }}</td>
+  <td>{{ tweet.text_length|default:"–" }}</td>
+  <td>{{ tweet.word_count|default:"–" }}</td>
+  <td>{{ tweet.char_density|default:"–" }}</td>
+  <td>{{ tweet.capital_word_count|default:"–" }}</td>
+  <td>{{ tweet.negation_count|default:"–" }}</td>
+  <td>{{ tweet.emoji_count|default:"–" }}</td>
+  <td>{% if tweet.is_question %}❓{% else %}–{% endif %}</td>
+  <td>{{ tweet.has_mentions }}</td>
+  <td>{{ tweet.has_hashtags }}</td>
+  <td>{{ tweet.has_links }}</td>
+</tr>
+
+          {% empty %}
+            <tr><td colspan="9" class="text-center">No tweets found.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- ── Pagination controls ───────────────────────────────────── -->
+  <div class="mt-3 d-flex justify-content-between align-items-center">
+    <div>
+      Showing {{ page_obj.start_index }}–{{ page_obj.end_index }} of {{ page_obj.paginator.count }} tweets
+    </div>
+    <div>
+      {% if page_obj.has_previous %}
+        <a class="btn btn-sm btn-outline-secondary page-link" href="#" data-page="{{ page_obj.previous_page_number }}">← Previous</a>
+      {% endif %}
+      {% if page_obj.has_next %}
+        <a class="btn btn-sm btn-outline-secondary page-link" href="#" data-page="{{ page_obj.next_page_number }}">Next →</a>
+      {% endif %}
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+{{ block.super }}
+
+<!-- 🌐 Auto-refresh every 2 seconds using AJAX -->
+<script>
+  setInterval(async () => {
+    const res = await fetch(window.location.href);
+    const html = await res.text();
+    const parser = new DOMParser();
+    const doc = parser.parseFromString(html, "text/html");
+
+    const newSection = doc.querySelector("#tweet-table-section");
+    if (newSection) {
+      document.querySelector("#tweet-table-section").innerHTML = newSection.innerHTML;
+    }
+  }, 2000); // every 2 sec
+</script>
+
+
+<!-- 🔄 AJAX Pagination -->
+<script>
+  document.addEventListener("DOMContentLoaded", () => {
+    document.querySelectorAll(".page-link").forEach(link => {
+      link.addEventListener("click", async function(e) {
+        e.preventDefault();
+        const page = this.dataset.page;
+        const params = new URLSearchParams(window.location.search);
+        params.set("page", page);
+
+        const res = await fetch(window.location.pathname + "?" + params.toString());
+        const html = await res.text();
+
+        const parser = new DOMParser();
+        const doc = parser.parseFromString(html, "text/html");
+
+        const newSection = doc.querySelector("#tweet-table-section");
+        document.querySelector("#tweet-table-section").innerHTML = newSection.innerHTML;
+      });
+    });
+  });
+</script>
+
+<!-- 📊 Bar Chart -->
+<script>
+  (async () => {
+    const url  = `{% url 'dashboard_frontend:api_bars' %}?grain={{ grain }}&mode={{ mode }}`;
+    const data = await fetch(url).then(r => r.json());
+    if (!data.length) return;
+
+    const ctx    = document.getElementById('barByBucket');
+    const labels = data.map(r => r.label);
+
+    new Chart(ctx, {
+      type: 'bar',
+      data: {
+        labels,
+        datasets: [
+          {label: 'Positive', data: data.map(r => r.pos), backgroundColor: '#14b157'},
+          {label: 'Neutral',  data: data.map(r => r.neu), backgroundColor: '#6c757d'},
+          {label: 'Negative', data: data.map(r => r.neg), backgroundColor: '#e03131'},
+        ]
+      },
+      options: {
+        responsive: true,
+        plugins: {legend: {position: 'bottom'}},
+        scales: {x: {stacked: true}, y: {stacked: true, beginAtZero: true}}
+      }
+    });
+  })();
+</script>
+{% endblock %}
+</div>
+
+

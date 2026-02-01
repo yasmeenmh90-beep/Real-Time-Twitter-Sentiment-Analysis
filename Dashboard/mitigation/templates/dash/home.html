@@ -1,0 +1,1036 @@
+{% extends "dashboard_frontend/base.html" %}
+{% load static %}
+
+{% block title %}Home - Sentiment Dashboard{% endblock %}
+
+{% block content %}
+<div class="container-fluid px-4 pt-4">
+  <h1 class="mb-4 fw-bold">Realtime Twitter Sentiment</h1>
+
+  <style>
+    .chart-h360 { height: 360px; }
+    .chart-h320 { height: 320px; }
+    .chart-h280 { height: 280px; }
+    .chart-h260 { height: 260px; }
+    .chart-h220 { height: 220px; }
+    .chart-h200 { height: 200px; }
+    #liveTableWrap { max-height: 420px; overflow: auto; }
+    .table-sticky thead th { position: sticky; top: 0; z-index: 1; }
+  </style>
+
+  <!-- ===== KPI Cards ===== -->
+  <div class="row g-4 mb-4">
+    {% for lbl,key,bg,icon in cards %}
+      <div class="col-6 col-md-4 col-lg-3">
+        <div class="card shadow-sm h-100">
+          <div class="card-body py-3">
+            <div class="d-flex align-items-center gap-2 mb-2">
+              <i class="bi {{ icon }} fs-4 text-{{ bg }}"></i>
+              <small class="text-uppercase fw-semibold text-muted">{{ lbl }}</small>
+             </div>
+            {# ensure "rate" tile uses id=kpi-total so our JS finds it #}
+            <h2 id="kpi-{% if key == 'rate' %}total{% else %}{{ key }}{% endif %}" class="fw-bold display-6">–</h2>
+            {% if key == 'rate' %}
+              <div class="small text-muted">Rate: <span id="ratePerMin">–</span> / min</div>
+            {% endif %}
+            <canvas id="spark-{% if key == 'rate' %}total{% else %}{{ key }}{% endif %}" height="26"></canvas>
+          </div>
+        </div>
+      </div>
+    {% endfor %}
+  </div>
+ <!-- ===== Timeline CTA ===== -->
+  <div class="card timeline-cta shadow-sm mb-4">
+    <div class="card-body d-flex align-items-center justify-content-between">
+      <div class="me-3">
+        <div class="d-flex align-items-center gap-2 mb-1">
+          <i class="bi bi-activity fs-4 text-primary"></i>
+          <span class="title">Timeline</span>
+        </div>
+        <div class="text-muted small">Live spikes, momentum, leaders & amplifiers</div>
+        <div class="small mt-2">
+          <span id="tl-peak" class="fw-semibold">Peak/min: —</span>
+          <span class="mx-2">•</span>
+          <span id="tl-total" class="fw-semibold">Last 60m: —</span>
+        </div>
+      </div>
+      <div class="d-flex align-items-center gap-3">
+        <canvas id="tl-spark" width="220" height="60" aria-hidden="true"></canvas>
+        <a class="btn btn-primary" href="{% url 'dashboard_frontend:timeline' %}">Open Timeline</a>
+      </div>
+    </div>
+  </div>
+     <!-- ===== Live Tweets ===== -->
+  <div class="card shadow-sm mb-4">
+    <div class="card-header fw-semibold d-flex justify-content-between align-items-center">
+      <span id="live-title">Live Tweets (<span id="tweet-count">0</span>)</span>
+      <div class="d-flex gap-2 align-items-center">
+        <button id="btn-export-live" class="btn btn-outline-secondary btn-sm">
+          <i class="bi bi-download"></i> Export CSV
+        </button>
+        <span class="badge bg-secondary" id="live-count">0 received</span>
+        <small class="text-muted" id="last-update">—</small>
+        <span id="ws-status" class="badge bg-secondary ms-2">—</span>
+      </div>
+    </div>
+    <div class="card-body">
+      <div class="d-flex flex-wrap gap-2 align-items-center mb-3">
+        <select id="filterSentiment" class="form-select form-select-sm w-auto">
+          <option value="all">All Sentiments</option>
+          <option value="positive">Positive</option>
+          <option value="neutral">Neutral</option>
+          <option value="negative">Negative</option>
+        </select>
+        <select id="filterCategory" class="form-select form-select-sm w-auto">
+          <option value="ALL">All Categories</option>
+          <option value="NORMAL">Normal</option>
+          <option value="LINK">Link</option>
+          <option value="REPLY">Reply</option>
+          <option value="QUOTE">Quote</option>
+          <option value="RETWEET">Retweet</option>
+          <option value="BUSINESS">Business</option>
+          <option value="POLITICS">Politics</option>
+           <option value="SPORTS">Sports</option>
+          <option value="AI">AI</option>
+          <option value="DISASTER">Disaster</option>
+          <option value="CRIME">Crime</option>
+        </select>
+        <select id="filterLimit" class="form-select form-select-sm w-auto">
+          <option value="20">20 per page</option>
+          <option value="50" selected>50 per page</option>
+          <option value="100">100 per page</option>
+          <option value="all">All</option>
+        </select>
+        <button class="btn btn-sm btn-primary" onclick="applyLiveFilters()">Apply</button>
+      </div>
+
+      <div id="liveTableWrap" class="table-responsive">
+        <table class="table table-sm table-hover align-middle mb-0 text-sm table-sticky">
+          <thead class="table-light">
+            <tr>
+              <th>Tweet ID</th>
+              <th>Time</th>
+              <th>Text</th>
+              <th>Clean Text</th>
+              <th>Source</th>
+              <th>Origin</th>
+              <th>Category</th>
+              <th>Language</th>
+              <th>Sentiment</th>
+              <th>Sentiment Label</th>
+            </tr>
+          </thead>
+          <tbody id="tweets-body"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+  <!-- ===== Real-time trend + Sentiment Mix ===== -->
+  <div class="row g-4">
+    <div class="col-12 col-lg-7">
+      <div class="card shadow-sm h-100">
+        <div class="card-header fw-semibold">Real-Time Sentiment Trend</div>
+        <div class="card-body">
+          <div class="chart-h360"><canvas id="rt-sentiment-trend"></canvas></div>
+        </div>
+      </div>
+    </div>
+    <div class="col-12 col-lg-5">
+      <div class="card shadow-sm h-100">
+        <div class="card-header fw-semibold">Sentiment Mix</div>
+        <div class="card-body">
+          <div class="chart-h200"><canvas id="sentimentMixPie"></canvas></div>
+          <div class="text-center mt-2 small" id="mix-legend"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <!-- ===== Real-time trend + Sentiment Mix ===== -->
+  <div class="row g-4">
+    <div class="col-12 col-lg-7">
+      <div class="card shadow-sm h-100">
+        <div class="card-header fw-semibold">Real-Time Sentiment Trend</div>
+        <div class="card-body">
+          <div class="chart-h360"><canvas id="rt-sentiment-trend"></canvas></div>
+        </div>
+      </div>
+    </div>
+    <div class="col-12 col-lg-5">
+      <div class="card shadow-sm h-100">
+        <div class="card-header fw-semibold">Sentiment Mix</div>
+        <div class="card-body">
+          <div class="chart-h200"><canvas id="sentimentMixPie"></canvas></div>
+          <div class="text-center mt-2 small" id="mix-legend"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <!-- ===== Languages / Hashtags / Words ===== -->
+  <div class="row g-4 mt-3">
+    <div class="col-12 col-lg-6">
+      <div class="card shadow-sm h-100">
+        <div class="card-header fw-semibold">Tweet Languages</div>
+        <div class="card-body">
+c          <div class="row g-3">
+            <div class="col-md-6">
+              <div class="chart-h280"><canvas id="languagePieChart"></canvas></div>
+            </div>
+            <div class="col-md-6">
+              <div class="table-responsive small">
+                <table class="table table-sm table-bordered mb-0">
+                  <thead class="table-light">
+                    <tr><th>Language</th><th>Tweets</th><th>% Share</th></tr>
+                  </thead>
+                  <tbody id="lang-table-body"></tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+     <div class="col-12 col-lg-6">
+      <div class="card shadow-sm h-100" id="card-hashtags">
+        <div class="card-header fw-semibold">Top Hashtags</div>
+        <div class="card-body">
+          <div class="chart-h260"><canvas id="miniHashtagChart"></canvas></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="col-12 col-lg-6">
+      <div class="card shadow-sm h-100" id="card-words">
+        <div class="card-header fw-semibold">Trending Words</div>
+        <div class="card-body">
+          <div class="chart-h260"><canvas id="wordChart"></canvas></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// =================== LIVE FRONTEND (WS-ONLY) ===================
+
+// ---------- helpers ----------
+const $id = (x) => document.getElementById(x);
+const nf  = (n) => Number(n||0).toLocaleString();
+
+function toSentimentCode(v){
+  const n = Number(v);
+  if (!Number.isNaN(n) && [0,1,2].includes(n)) return n;
+  const s = String(v ?? '').toLowerCase();
+  if (s.startsWith('neg')) return 0; // 0 = negative
+  if (s.startsWith('neu')) return 1; // 1 = neutral
+  if (s.startsWith('pos')) return 2; // 2 = positive
+  return null;
+}
+function codeToText(code){
+  return code === 2 ? 'positive' :
+         code === 1 ? 'neutral'  :
+         code === 0 ? 'negative' : '';
+}
+const LANG_PALETTE = ['#4e79a7','#f28e2b','#e15759','#76b7b2','#59a14f','#edc948','#b07aa1','#ff9da7','#9c755f','#bab0ab','#1f77b4','#2ca02c'];
+const STOP = new Set(['the','and','for','you','your','with','that','this','are','was','were','have','has','had','but','not','from','they','them','their','our','out',
+                      'about','what','when','how','why','who','will','shall','can','cant',
+'cannot','could','should','would','been','being','into','on','in','of',
+'to','at','is','it','its','im','ive','ill','we','us','rt','http','https','co']);
+const WORD_RX = /[a-z]{3,}/g;
+const HASHTAG_RX = /#\w+/g;
+
+// ---------- state ----------
+let tweetCache = window.tweetCache || [];
+let seenIds    = window.seenIds    || new Set();
+let totalReceived = window.totalReceived || 0;
+window.tweetCache = tweetCache; window.seenIds = seenIds; window.totalReceived = totalReceived;
+
+let filteredRows = [];
+let languagePieChart = null, miniHashtagChart = null, wordChart = null, MIX_PIE = null;
+
+// ---------- KPIs ----------
+let kpiSnapshotSeen = false;
+const kpiCounts = { pos: 0, neu: 0, neg: 0 };
+
+function renderKpis(pos, neu, neg, total, ratePerMin){
+  $id('kpi-pos')   && ($id('kpi-pos').textContent   = nf(pos));
+  $id('kpi-neu')   && ($id('kpi-neu').textContent   = nf(neu));
+  $id('kpi-neg')   && ($id('kpi-neg').textContent   = nf(neg));
+  $id('kpi-total') && ($id('kpi-total').textContent = nf(total ?? (pos+neu+neg)));
+  if ($id('ratePerMin') && ratePerMin != null) $id('ratePerMin').textContent = String(ratePerMin);
+}
+function updateKpisFromSnapshot(msg){
+  kpiSnapshotSeen = true;
+  kpiCounts.pos = Number(msg.pos||0);
+  kpiCounts.neu = Number(msg.neu||0);
+  kpiCounts.neg = Number(msg.neg||0);
+  renderKpis(kpiCounts.pos, kpiCounts.neu, kpiCounts.neg, Number(msg.total||0), msg.rate_per_min);
+}
+function bumpKpisFromTweet(t){
+  if (kpiSnapshotSeen) return;
+  const code = toSentimentCode(t.sentiment_text ?? t.sentiment ?? t.sentiment_label);
+if (code === 2) kpiCounts.pos++;
+  else if (code === 1) kpiCounts.neu++;
+  else if (code === 0) kpiCounts.neg++;
+  renderKpis(kpiCounts.pos, kpiCounts.neu, kpiCounts.neg);
+}
+
+// ---------- realtime trend ----------
+let RT_POS=0, RT_NEU=0, RT_NEG=0, _trendDirty=false;
+(function initTrend(){
+  const el = $id('rt-sentiment-trend'); if(!el) return;
+  window.rtCumChart = new Chart(el.getContext('2d'), {
+    type:'line',
+    data:{ labels:[], datasets:[
+      {label:'Positive', data:[], borderWidth:2, tension:0.25},
+      {label:'Neutral',  data:[], borderWidth:2, tension:0.25},
+      {label:'Negative', data:[], borderWidth:2, tension:0.25},
+    ]},
+    options:{ animation:false, maintainAspectRatio:false, plugins:{ legend:{ position:'bottom' } }, scales:{ y:{ beginAtZero:true } } }
+  });
+  setInterval(()=>{ if(!_trendDirty) return; _trendDirty=false;
+    const ts = new Date().toLocaleTimeString([], {hour:'2-digit',minute:'2-digit',second:'2-digit'});
+    const ch = window.rtCumChart;
+    ch.data.labels.push(ts);
+    ch.data.datasets[0].data.push(RT_POS);
+    ch.data.datasets[1].data.push(RT_NEU);
+    ch.data.datasets[2].data.push(RT_NEG);
+    ch.update();
+  }, 1000);
+})();
+function onTweetForTrend(msg){
+  const code = toSentimentCode(msg.sentiment_text ?? msg.sentiment ?? msg.sentiment_label);
+  if (code === 2) RT_POS++; else if (code === 1) RT_NEU++; else if (code === 0) RT_NEG++; else return;
+  _trendDirty = true;
+}
+
+// ---------- live table ----------
+function updateLiveTweetTable(rows){
+  const wrap = $id('liveTableWrap'), tb = $id('tweets-body');
+  if(!tb || !wrap) return;
+  const atTop = wrap.scrollTop <= 2, prevH = wrap.scrollHeight;
+
+  tb.innerHTML = '';
+  for(const t of rows){
+    const ts = t.timestamp ? new Date(t.timestamp) : null;
+    const tstr = ts ? ts.toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'}) : '–';
+    const s = String(t.sentiment||'').toLowerCase();
+    const cls = s.startsWith('positive') ? 'success' : s.startsWith('negative') ? 'danger' : 'secondary';
+    tb.insertAdjacentHTML('beforeend', `
+      <tr>
+        <td class="text-monospace">${t.ids || '–'}</td>
+        <td>${tstr}</td>
+        <td class="text-truncate" style="max-width:24rem;">${t.text || '–'}</td>
+        <td class="text-truncate" style="max-width:24rem;">${t.clean_text || '–'}</td>
+        <td>${t.source || '–'}</td>
+        <td>${t.origin || '–'}</td>
+        <td>${t.category || '–'}</td>
+        <td>${t.lang || t.language || '–'}</td>
+        <td><span class="badge text-bg-${cls}">${t.sentiment || '–'}</span></td>
+ <td>${t.sentiment_label ?? '–'}</td>
+      </tr>
+    `);
+  }
+  if (atTop) wrap.scrollTop = 0; else wrap.scrollTop += Math.max(wrap.scrollHeight - prevH, 0);
+  $id('tweet-count') && ($id('tweet-count').textContent = rows.length);
+  const lastTs = rows.length ? (rows[0].timestamp || rows[0].created_at || Date.now()) : null;
+  $id('last-update') && ($id('last-update').textContent = lastTs ? `Last update ${new Date(lastTs).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'})}` : '—');
+}
+function _updateLiveCountersUI(){
+  const total = tweetCache.length;
+  $id('tweet-count') && ($id('tweet-count').textContent = String(total));
+  $id('live-count')  && ($id('live-count').textContent  = `${total.toLocaleString()} received`);
+  $id('last-update') && ($id('last-update').textContent = new Date().toLocaleTimeString([], {hour:'2-digit',minute:'2-digit',second:'2-digit'}));
+}
+
+// filters
+function applyLiveFilters(){
+  const sentiSel = $id('filterSentiment')?.value || 'all';
+  const catSel   = $id('filterCategory')?.value || 'ALL';
+  const limitSel = $id('filterLimit')?.value || '50';
+
+  let rows = tweetCache.slice(0);
+  if (sentiSel !== 'all') rows = rows.filter(r => String(r.sentiment||'').toLowerCase().startsWith(sentiSel));
+  if (catSel   !== 'ALL') rows = rows.filter(r => String(r.category||'').toUpperCase() === catSel);
+  if (limitSel !== 'all') rows = rows.slice(0, Number(limitSel)||50);
+
+  filteredRows = rows.slice(0);
+  updateLiveTweetTable(rows);
+ updateDerivedCharts();
+}
+['filterSentiment','filterCategory','filterLimit'].forEach(id => $id(id)?.addEventListener('change', applyLiveFilters));
+
+// ---------- derived charts ----------
+function pickRows(){ return filteredRows.length ? filteredRows : tweetCache; }
+
+function updateSentimentMix(pos, neu, neg){
+  const el = $id('sentimentMixPie'); if(!el) return;
+  if (!MIX_PIE){
+    MIX_PIE = new Chart(el, {
+      type:'doughnut',
+      data:{ labels:['Positive','Neutral','Negative'], datasets:[{ data:[pos,neu,neg], backgroundColor:['#0d6efd','#6c757d','#e03131'] }] },
+      options:{ cutout:'65%', animation:false, plugins:{ legend:{ position:'bottom' } }, maintainAspectRatio:false }
+    });
+  } else {
+    MIX_PIE.data.datasets[0].data = [pos,neu,neg];
+    MIX_PIE.update();
+  }
+  $id('mix-legend').innerHTML =
+    `P: <b class="text-primary">${nf(pos)}</b> • `+
+    `N: <b class="text-secondary">${nf(neu)}</b> • `+
+    `Neg: <b class="text-danger">${nf(neg)}</b>`;
+}
+function recomputeMixFromCache(){
+  let p=0, ne=0, n=0;
+  for(const r of (window.tweetCache||[])){
+    const code = toSentimentCode(r.sentiment_label ?? r.sentiment);
+    if (code === 2) p++;
+    else if (code === 1) ne++;
+else if (code === 0) n++;
+  }
+  updateSentimentMix(p, ne, n);
+}
+window.recomputeMixFromCache = recomputeMixFromCache;
+
+function renderLanguages(){
+  const rows = pickRows();
+  const m = new Map();
+  for(const r of rows){
+    const lg = (r.lang || r.language || '').trim().toLowerCase();
+    if (!lg) continue;
+    m.set(lg, (m.get(lg)||0)+1);
+  }
+  const data = [...m.entries()].map(([lang,count])=>({lang,count})).sort((a,b)=>b.count-a.count).slice(0,12);
+  const total = data.reduce((s,d)=>s+d.count,0);
+
+  const tbody = $id('lang-table-body');
+  if (tbody){
+    tbody.innerHTML = data.map(d=>{
+      const pct = total ? ((d.count/total)*100).toFixed(1) : '0.0';
+      return `<tr><td>${d.lang}</td><td>${d.count}</td><td>${pct}%</td></tr>`;
+    }).join('');
+  }
+
+  const canv = $id('languagePieChart'); if(!canv) return;
+  const labels = data.map(d=>d.lang);
+  const counts = data.map(d=>d.count);
+  const colors = LANG_PALETTE.slice(0, labels.length);
+  if(!languagePieChart){
+    languagePieChart = new Chart(canv, { type:'pie',
+      data:{ labels, datasets:[{ data:counts, backgroundColor:colors, borderWidth:1 }] },
+      options:{ plugins:{ legend:{ position:'bottom' } }, maintainAspectRatio:false, animation:false }
+    });
+  }else{
+    languagePieChart.data.labels = labels;
+    languagePieChart.data.datasets[0].data = counts;
+    languagePieChart.data.datasets[0].backgroundColor = colors;
+    languagePieChart.update();
+  }
+}
+function topHashtags(rows,k=20){
+  const m = new Map();
+  for(const r of rows){
+    const txt = (r.text || r.clean_text || '');
+    const tags = txt.match(HASHTAG_RX) || [];
+    for(const t of tags){ const tag = t.toLowerCase(); m.set(tag,(m.get(tag)||0)+1); }
+  }
+  return [...m.entries()].map(([hashtag,count])=>({hashtag,count})).sort((a,b)=>b.count-a.count).slice(0,k);
+}
+function topWords(rows,k=30){
+  const m = new Map();
+  for(const r of rows){
+    const txt = String(r.clean_text || r.text || '').toLowerCase();
+    const words = txt.match(WORD_RX) || [];
+    for(const w of words){ if (STOP.has(w)) continue; m.set(w,(m.get(w)||0)+1); }
+  }
+  return [...m.entries()].map(([word,weight])=>({word,weight})).sort((a,b)=>b.weight-a.weight).slice(0,k);
+}
+function updateDerivedCharts(){
+  // sentiment mix
+let p=0, ne=0, n=0;
+  for(const r of pickRows()){
+    const code = toSentimentCode(r.sentiment_label ?? r.sentiment);
+    if (code === 2) p++; else if (code === 1) ne++; else if (code === 0) n++;
+  }
+  updateSentimentMix(p, ne, n);
+
+  // languages
+  renderLanguages();
+
+  // hashtags
+  (function(){
+    const top = topHashtags(pickRows(), 20);
+    const el = $id('miniHashtagChart'); const card = $id('card-hashtags'); if(!el||!card) return;
+    if(!top.length){ card.classList.add('d-none'); return; } else { card.classList.remove('d-none'); }
+    if(!miniHashtagChart){
+      miniHashtagChart = new Chart(el, { type:'bar',
+        data:{ labels: top.map(t=>t.hashtag), datasets:[{ data: top.map(t=>t.count) }] },
+        options:{ plugins:{ legend:{ display:false }}, scales:{ y:{ beginAtZero:true }}, maintainAspectRatio:false }
+      });
+    }else{
+      miniHashtagChart.data.labels = top.map(t=>t.hashtag);
+      miniHashtagChart.data.datasets[0].data = top.map(t=>t.count);
+      miniHashtagChart.update();
+    }
+  })();
+// words
+  (function(){
+    const top = topWords(pickRows(), 30);
+    const el = $id('wordChart'); const card = $id('card-words'); if(!el||!card) return;
+    if(!top.length){ card.classList.add('d-none'); return; } else { card.classList.remove('d-none'); }
+    const labels = top.map(w=>w.word), values = top.map(w=>w.weight);
+    if(!wordChart){
+      wordChart = new Chart(el, { type:'bar',
+        data:{ labels, datasets:[{ data: values, borderWidth:1 }] },
+        options:{ indexAxis:'y', responsive:true, maintainAspectRatio:false,
+          scales:{ x:{ beginAtZero:true, ticks:{ callback:v=>nf(v) } } },
+          plugins:{ legend:{ display:false } }
+        }
+      });
+    }else{
+      wordChart.data.labels = labels;
+      wordChart.data.datasets[0].data = values;
+      wordChart.update();
+    }
+  })();
+}
+
+// ---------- seed (initial paint) ----------
+async function seedFromAPI(){
+  try{
+    const data = await fetch("{% url 'dashboard_frontend:api_metrics' %}?seed=1000", {cache:'no-store'}).then(r=>r.json());
+    // KPIs
+    const c = data.counts || {};
+    updateKpisFromSnapshot({ pos:c.pos||0, neu:c.neu||0, neg:c.neg||0, total:c.total||0, rate_per_min:data.rate_per_min || null });
+
+    // Tweets
+    if (Array.isArray(data.tweets)){
+      for(const t of data.tweets){
+        const code = toSentimentCode(t.sentiment ?? t.sentiment_label);
+        const row = {
+          ids: t.tweet_id || t.id || t.ids || '',
+          text: t.text || '',
+          clean_text: t.clean_text || t.processed_text || '',
+          source: t.source || 'scorer',
+          origin: (t.origin || 'live').toLowerCase(),
+          category: (t.category || t.tweet_type || (t.hasLink ? 'LINK' : 'NORMAL') || 'NORMAL').toUpperCase(),
+          lang: t.lang || t.language || '',
+          sentiment: codeToText(code),
+          sentiment_label: code,
+          timestamp: t.timestamp || t.created_at || t.date_ts || Date.now(),
+        };
+        if (row.ids && !seenIds.has(row.ids)){ seenIds.add(row.ids); tweetCache.push(row); totalReceived++; }
+      }
+      tweetCache.sort((a,b)=> new Date(b.timestamp) - new Date(a.timestamp));
+      applyLiveFilters();
+    }
+  }catch(e){ console.warn('seed failed', e); }
+
+}
+
+// ---------- WebSocket ----------
+(function openWS(){
+  const proto = location.protocol === 'https:' ? 'wss' : 'ws';
+  const ws = new WebSocket(`${proto}://${location.host}/ws/sentiment/`);
+  const badge = $id('ws-status');
+
+  ws.onopen  = () => { if(badge){ badge.textContent='Live';    badge.className='badge bg-success'; } };
+  ws.onclose = () => { if(badge){ badge.textContent='Offline'; badge.className='badge bg-danger'; } setTimeout(openWS, 1500); };
+  ws.onerror = (e) => console.warn('WS error', e);
+
+  ws.onmessage = (evt) => {
+    let data; try { data = JSON.parse(evt.data); } catch { return; }
+    if (data.type === 'kpis') { updateKpisFromSnapshot(data); return; }
+    if (data.type === 'tweet' || data.text || data.sentiment !== undefined) {
+      addTweet(data); bumpKpisFromTweet(data); recomputeMixFromCache(); return;
+    }
+  };
+
+  function addTweet(t){
+    const code = toSentimentCode(t.sentiment_text ?? t.sentiment ?? t.sentiment_label);
+    if (code == null) return;
+    const row = {
+      ids: t.ids || t.id || t.tweet_id || '',
+      text: t.text || '',
+      clean_text: t.clean_text || t.processed_text || '',
+      source: t.source || 'scorer',
+      origin: (t.origin || (t.backfill?'backfill':'live') || 'live').toLowerCase(),
+      category: (t.category || t.tweet_type || (t.hasLink ? 'LINK' : 'NORMAL') || 'NORMAL').toUpperCase(),
+      lang: t.lang || t.language || '',
+      sentiment: codeToText(code),
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+{% block extra_js %}
+<script>
+(() => {
+  'use strict';
+
+  // ===== helpers =====
+  const $id = (x) => document.getElementById(x);
+  const nf  = (n) => Number(n||0).toLocaleString();
+  const LANG_PALETTE = ['#4e79a7','#f28e2b','#e15759','#76b7b2','#59a14f','#edc948','#b07aa1','#ff9da7','#9c755f','#bab0ab','#1f77b4','#2ca02c'];
+  const HASHTAG_RX = /#[\p{L}\p{N}_]+/gu;
+  const WORD_RX    = /[\p{L}]{3,}/gu;
+  const STOP = new Set([
+    'the','and','for','you','your','with','that','this','are','was','were','have','has','had',
+    'but','not','from','they','them','their','our','out','about','what','when','who','why','how',
+    'http','https','amp','rt','via','com','www'
+  ]);
+  // chart instances
+  let languagePieChart = null;
+  let miniHashtagChart = null;
+  let wordChart = null;
+
+  // fast re-render throttle
+  let _chartsDirty = false;
+  function scheduleChartsUpdate() {
+     if (_chartsDirty) return;
+    _chartsDirty = true;
+    requestAnimationFrame(() => {
+      _chartsDirty = false;
+      updateDerivedCharts();   // same function you already call
+    });
+  }
+
+  // sentiment mapping: 0=neg, 1=neu, 2=pos
+  function toSentimentCode(v){
+    const n = Number(v);
+    if (!Number.isNaN(n) && [0,1,2].includes(n)) return n;
+    const s = String(v ?? '').toLowerCase();
+    if (s.startsWith('pos')) return 2;
+    if (s.startsWith('neu')) return 1;
+    if (s.startsWith('neg')) return 0;
+    return null;
+  }
+  function codeToText(c){ return c===2?'positive':c===1?'neutral':c===0?'negative':''; }
+  function isToday(ts){
+    const d = new Date(ts); const t = new Date();
+    return d.getFullYear()===t.getFullYear() && d.getMonth()===t.getMonth() && d.getDate()===t.getDate();
+  }
+
+  function recomputeKpisFromRows(rows){
+    let p=0, ne=0, n=0;
+    for (const r of rows){
+      const c = toSentimentCode(r.sentiment_label ?? r.sentiment);
+      if (c===2) p++; else if (c===1) ne++; else if (c===0) n++;
+     }
+     renderKpis(p, ne, n, p+ne+n, null);
+   }
+
+  // ===== state =====
+  let tweetCache = window.tweetCache || [];
+  let filteredRows = [];
+  let seenIds = window.seenIds || new Set();
+  window.tweetCache = tweetCache; window.seenIds = seenIds;
+
+  // charts that are referenced later
+  let languagePieChart = window.languagePieChart || null;
+  let miniHashtagChart = window.miniHashtagChart || null;
+
+  // ===== KPIs =====
+  let kpiSnapshotSeen=false;
+  const kpiCounts={pos:0,neu:0,neg:0};
+  function renderKpis(pos,neu,neg,total,ratePerMin){
+     $id('kpi-pos')   && ($id('kpi-pos').textContent   = nf(pos));
+    $id('kpi-neu')   && ($id('kpi-neu').textContent   = nf(neu));
+    $id('kpi-neg')   && ($id('kpi-neg').textContent   = nf(neg));
+    $id('kpi-total') && ($id('kpi-total').textContent = nf(total ?? (pos+neu+neg)));
+    if ($id('ratePerMin') && ratePerMin != null) { $id('ratePerMin').textContent = String(ratePerMin); }
+  }
+  function updateKpisFromSnapshot(msg){
+    kpiSnapshotSeen=true;
+    kpiCounts.pos = Number(msg.pos||0);
+    kpiCounts.neu = Number(msg.neu||0);
+    kpiCounts.neg = Number(msg.neg||0);
+    const total = ('total' in msg) ? Number(msg.total||0) : (kpiCounts.pos+kpiCounts.neu+kpiCounts.neg);
+    renderKpis(kpiCounts.pos,kpiCounts.neu,kpiCounts.neg,total,msg.rate_per_min);
+  }
+  function bumpKpisFromTweet(t){
+    if (kpiSnapshotSeen) return;
+    const c = toSentimentCode(t.sentiment_text ?? t.sentiment ?? t.sentiment_label);
+    if (c==null) return;
+    if (c===2) kpiCounts.pos++; else if (c===1) kpiCounts.neu++; else if (c===0) kpiCounts.neg++;
+    renderKpis(kpiCounts.pos,kpiCounts.neu,kpiCounts.neg);
+  }
+
+   // ===== trend =====
+  let RT_POS=0, RT_NEU=0, RT_NEG=0, _trendDirty=false;
+  (function initTrend(){
+    const el = $id('rt-sentiment-trend'); if (!el) return;
+    window.rtCumChart = new Chart(el.getContext('2d'), {
+      type:'line',
+      data:{labels:[], datasets:[
+        {label:'Positive', data:[], borderWidth:2, tension:.25},
+        {label:'Neutral',  data:[], borderWidth:2, tension:.25},
+        {label:'Negative', data:[], borderWidth:2, tension:.25},
+      ]},
+      options:{
+        animation:false, responsive:true, maintainAspectRatio:false,
+        scales:{ y:{ beginAtZero:true } },
+        plugins:{ legend:{ position:'bottom' } }
+      }
+    });
+    setInterval(()=>{ if(!_trendDirty) return; _trendDirty=false;
+      const t = new Date().toLocaleTimeString([], {hour:'2-digit',minute:'2-digit',second:'2-digit'});
+      const ch = window.rtCumChart;
+      ch.data.labels.push(t);
+      ch.data.datasets[0].data.push(RT_POS);
+      ch.data.datasets[1].data.push(RT_NEU);
+      ch.data.datasets[2].data.push(RT_NEG);
+      ch.update();
+    }, 1000);
+  })();
+  function onTweetForTrend(t){
+    const c = toSentimentCode(t.sentiment_text ?? t.sentiment ?? t.sentiment_label);
+    if (c===2) RT_POS++; else if (c===1) RT_NEU++; else if (c===0) RT_NEG++; else return;
+    _trendDirty=true;
+  }
+
+  // ===== table =====
+  function updateLiveTweetTable(rows){
+    const wrap=$id('liveTableWrap'), tb=$id('tweets-body'); if(!tb||!wrap) return;
+    const atTop = wrap.scrollTop<=2, prevH=wrap.scrollHeight;
+    tb.innerHTML='';
+    for(const t of rows){
+      const ts = t.timestamp ? new Date(t.timestamp).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'}) : '–';
+      const s  = String(t.sentiment||'').toLowerCase();
+      const cls= s.startsWith('positive')?'success':(s.startsWith('negative')?'danger':'secondary');
+      tb.insertAdjacentHTML('beforeend', `
+        <tr>
+          <td class="text-monospace">${t.ids||'–'}</td>
+          <td>${ts}</td>
+          <td class="text-truncate" style="max-width:24rem;">${t.text||'–'}</td>
+          <td class="text-truncate" style="max-width:24rem;">${t.clean_text||'–'}</td>
+          <td>${t.source||'–'}</td>
+          <td>${t.origin||'–'}</td>
+          <td>${t.category||'–'}</td>
+          <td>${t.lang || t.language || 'unknown'}</td>
+          <td><span class="badge text-bg-${cls}">${t.sentiment||'–'}</span></td>
+          <td>${t.sentiment_label ?? '–'}</td>
+        </tr>`);
+    }
+    if (atTop) wrap.scrollTop = 0; else wrap.scrollTop += Math.max(wrap.scrollHeight - prevH, 0);
+    $id('tweet-count') && ($id('tweet-count').textContent = rows.length.toLocaleString());
+    const lt = rows[0]?.timestamp ? new Date(rows[0].timestamp).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'}) : '–';
+    $id('last-update') && ($id('last-update').textContent = `Last update ${lt}`);
+  }
+  function _updateLiveCountersUI(){
+    const total = tweetCache.length;
+    $id('tweet-count') && ($id('tweet-count').textContent = String(total));
+    $id('live-count')  && ($id('live-count').textContent  = `${total.toLocaleString()} received`);
+    $id('last-update') && ($id('last-update').textContent =
+      new Date().toLocaleTimeString([], {hour:'2-digit',minute:'2-digit',second:'2-digit'}));
+  }
+
+  // ===== filters =====
+  function pickRows(){ return (filteredRows.length ? filteredRows : tweetCache); }
+  function applyLiveFilters(){
+    const origin   = $id('filterOrigin')?.value || 'all';
+    const when     = $id('filterWhen')?.value   || 'all';
+    const sentiSel = $id('filterSentiment')?.value || 'all';
+    const catSel   = $id('filterCategory')?.value  || 'ALL';
+    const limitSel = $id('filterLimit')?.value     || '50';
+
+    let rows = tweetCache.slice(0);
+    if (origin!=='all') rows = rows.filter(r => String(r.origin||'').toLowerCase() === origin);
+    if (when==='today'){
+      const start = new Date(); start.setHours(0,0,0,0);
+      rows = rows.filter(r => r.timestamp && new Date(r.timestamp) >= start);
+    }
+    if (sentiSel!=='all') rows = rows.filter(r => String(r.sentiment||'').toLowerCase().startsWith(sentiSel));
+    if (catSel!=='ALL')   rows = rows.filter(r => String(r.category||'').toLowerCase() === catSel.toLowerCase());
+    if (limitSel!=='all') rows = rows.slice(0, Number(limitSel));
+
+    filteredRows = rows.slice(0);
+    updateLiveTweetTable(filteredRows);
+    recomputeKpisFromRows(filteredRows);
+    scheduleChartsUpdate();
+  }
+   ['filterOrigin','filterWhen','filterSentiment','filterCategory','filterLimit'].forEach(id=>{
+    $id(id)?.addEventListener('change', applyLiveFilters);
+  });
+
+   // ===== sentiment mix =====
+  let MIX_PIE=null;
+  function updateSentimentMix(pos, neu, neg){
+    const el = $id('sentimentMixPie'); if (!el) return;
+    if (!MIX_PIE){
+      MIX_PIE = new Chart(el, {
+        type:'doughnut',
+        data:{ labels:['Positive','Neutral','Negative'],
+               datasets:[{ data:[pos,neu,neg], backgroundColor:['#0d6efd','#6c757d','#e03131'] }] },
+        options:{
+          cutout:'65%', animation:false, maintainAspectRatio:false,
+          plugins:{ legend:{ position:'bottom' } }
+        }
+      });
+    } else {
+      MIX_PIE.data.datasets[0].data = [pos,neu,neg];
+      MIX_PIE.update();
+    }
+    $id('mix-legend').innerHTML =
+      `P: <b class="text-primary">${nf(pos)}</b> • `+
+      `N: <b class="text-secondary">${nf(neu)}</b> • `+
+      `Neg: <b class="text-danger">${nf(neg)}</b>`;
+   }
+  document.addEventListener('DOMContentLoaded', () => updateSentimentMix(0,0,0));
+
+  // ===== languages / hashtags / words =====
+  function cntLanguages(rows){
+    const m = new Map();
+    for (const r of rows){
+      const lang = String(r.lang || r.language || r.lang_out || r.lang_in || 'unknown')
+                   .trim().toLowerCase() || 'unknown';
+      m.set(lang, (m.get(lang)||0)+1);
+    }
+    return [...m.entries()].map(([lang,count])=>({lang,count}))
+                           .sort((a,b)=>b.count-a.count).slice(0,12);
+  }
+  function renderLanguages(rows){
+    const data = cntLanguages(rows);
+    const total = data.reduce((s,d)=>s+d.count,0);
+
+    const tbody = $id('lang-table-body');
+    if (tbody){
+      tbody.innerHTML = data.map(d=>{
+        const pct = total ? ((d.count/total)*100).toFixed(1) : '0.0';
+         return `<tr><td>${d.lang}</td><td>${d.count}</td><td>${pct}%</td></tr>`;
+      }).join('');
+    }
+    const canv = $id('languagePieChart'); if (!canv) return;
+    const labels = data.map(d=>d.lang);
+    const counts = data.map(d=>d.count);
+    const colors = LANG_PALETTE.slice(0, labels.length);
+    requestAnimationFrame(()=>{
+      if (!languagePieChart){
+        languagePieChart = new Chart(canv, {
+          type:'pie',
+          data:{ labels, datasets:[{ data: counts, backgroundColor: colors, borderWidth: 1 }] },
+          options:{ plugins:{ legend:{ position:'bottom' }}, maintainAspectRatio:false, animation:false }
+        });
+      } else {
+        languagePieChart.data.labels = labels;
+        languagePieChart.data.datasets[0].data = counts;
+        languagePieChart.data.datasets[0].backgroundColor = colors;
+        languagePieChart.update('none');
+       }
+       setTimeout(()=> languagePieChart && languagePieChart.resize(), 0);
+     });
+   }
+  function topHashtags(rows, k=20){
+     const m = new Map();
+    for(const r of rows){
+      const txt = String(r.text || r.clean_text || '');
+      for (const t of (txt.match(HASHTAG_RX) || [])){
+        const tag = t.toLowerCase(); m.set(tag, (m.get(tag)||0)+1);
+      }
+    }
+    return [...m.entries()].map(([hashtag,count])=>({hashtag,count}))
+                           .sort((a,b)=>b.count-a.count).slice(0,k);
+  }
+  function topWords(rows, k=30){
+    const m = new Map();
+    for(const r of rows){
+      const raw = String(r.clean_text || r.text || '');
+      const txt = raw.toLowerCase();
+      for (const w of (txt.match(WORD_RX) || [])){
+        if (STOP.has(w)) continue; m.set(w,(m.get(w)||0)+1);
+      }
+    }
+    return [...m.entries()].map(([word,weight])=>({word,weight}))
+                           .sort((a,b)=>b.weight-a.weight).slice(0,k);
+  }
+  function updateDerivedCharts(){
+  const rowsAll = (filteredRows.length ? filteredRows : tweetCache);
+    let p=0, ne=0, n=0;
+    for (const r of rowsAll){
+      const code = toSentimentCode(r.sentiment_label ?? r.sentiment);
+      if (code===2) p++; else if (code===1) ne++; else if (code===0) n++;
+    }
+    updateSentimentMix(p, ne, n);
+    // languages
+    renderLanguages(rowsAll);
+    // hashtags
+    (function(){
+      const top = topHashtags(rowsAll, 20);
+      const el=$id('miniHashtagChart'), card=$id('card-hashtags'); if(!el||!card) return;
+      if(!top.length){ card.classList.add('d-none'); return; } else { card.classList.remove('d-none'); }
+      const labels = top.map(t=>t.hashtag), values = top.map(t=>t.count);
+      requestAnimationFrame(()=>{
+        if(!miniHashtagChart){
+          miniHashtagChart = new Chart(el, { type:'bar',
+          data:{ labels, datasets:[{ data: values, borderWidth:1 }] },
+          options:{ plugins:{ legend:{ display:false }}, scales:{ y:{ beginAtZero:true }},
+                      maintainAspectRatio:false }
+           });
+      } else {
+        miniHashtagChart.data.labels = labels;
+        miniHashtagChart.data.datasets[0].data = values;
+        miniHashtagChart.update(none);
+      }
+      setTimeout(()=> miniHashtagChart && miniHashtagChart.resize(), 0);
+    });
+
+  })();
+
+  // words
+    (function () {
+      const top  = topWords(rowsAll, 30);
+      const el   = document.getElementById('wordChart');
+      const card = document.getElementById('card-words');
+      if (!el || !card) return;
+
+      if (!top.length) { card.classList.add('d-none'); return; } else { card.classList.remove('d-none'); }
+
+      const labels = top.map(w => w.word);
+      const values = top.map(w => w.weight);
+
+      requestAnimationFrame(()=>{
+        if (!wordChart) {
+          wordChart = new Chart(el, {
+          type: 'bar',
+          data: { labels, datasets: [{ data: values, borderWidth: 1 }] },
+          options: {
+            indexAxis: 'y',
+            responsive: true,
+            maintainAspectRatio: false,
+            scales: { x: { beginAtZero: true, ticks: { callback: (v) => nf(v) } } },
+            plugins: { legend: { display: false } }
+          }
+        });
+       } else {
+        wordChart.data.labels = labels;
+        wordChart.data.datasets[0].data = values;
+        wordChart.update(none);
+      }
+      setTimeout(()=> wordChart && wordChart.resize(), 0);
+    });
+  })();
+  }
+
+   // ===== seed (backfill/today) =====
+  async function seedFromAPI(){
+    try{
+      const resp = await fetch("{% url 'dashboard_frontend:api_metrics' %}?seed=1000",{cache:'no-store'});
+      const data = await resp.json();
+      const c = data.counts || {};
+      updateKpisFromSnapshot({ pos:c.pos||0, neu:c.neu||0, neg:c.neg||0, total:c.total||0, rate_per_min:data.rate_per_min||null });
+
+      if (Array.isArray(data.tweets)){
+        for (const t of data.tweets){
+          const code = toSentimentCode(t.sentiment ?? t.sentiment_label);
+          const ts = t.timestamp || t.created_at || t.date_ts || Date.now();
+          const row = {
+            ids: t.ids || t.id || t.tweet_id || '',
+            text: t.text || '',
+            clean_text: t.clean_text || t.processed_text || '',
+            source: t.source || 'seed',
+            origin: String(t.origin ?? 'unknown').toLowerCase(),
+            category: String(t.category ?? 'NORMAL').toUpperCase(),
+            lang: (t.lang ?? t.lang_out ?? t.lang_in ?? t.language ?? 'unknown'),
+            lang_name: t.langName || t.lang_name || undefined,
+            sentiment_label: toSentimentCode(t.sentiment ?? t.sentiment_label),
+            sentiment: codeToText(toSentimentCode(t.sentiment ?? t.sentiment_label)),
+            timestamp: t.ts || t.timestamp || t.created_at || Date.now()
+           };
+          if (row.ids && !seenIds.has(row.ids)){ seenIds.add(row.ids); tweetCache.push(row); }
+        }
+        tweetCache.sort((a,b)=> new Date(b.timestamp) - new Date(a.timestamp));
+        applyLiveFilters();
+        scheduleChartsUpdate();
+      }
+    }catch(e){ console.warn('seed failed', e); }
+  }
+
+  // ===== websocket with fallback badge =====
+  (function openWS(){
+    const proto = location.protocol === 'https:' ? 'wss' : 'ws';
+    const ws = new WebSocket(`${proto}://${location.host}/ws/sentiment/`);
+    const badge = document.getElementById('ws-status');
+
+    if (badge){ badge.textContent='Connecting...'; badge.className='badge bg-secondary'; }
+    ws.onopen  = ()=>{ if(badge){ badge.textContent='Live';    badge.className='badge bg-success'; } };
+    ws.onclose = ()=>{ if(badge){ badge.textContent='Offline'; badge.className='badge bg-danger'; } setTimeout(openWS, 2000); };
+    ws.onerror = (e)=> console.warn('WS error', e);
+
+  ws.onmessage = (evt)=>{
+      let msg; try{ msg = JSON.parse(evt.data); }catch{ return; }
+      if (msg.type === 'kpis') { updateKpisFromSnapshot(msg); return; }
+      if (msg.type === 'tweet' || msg.text || msg.sentiment !== undefined){
+        addTweet(msg); bumpKpisFromTweet(msg); return;
+      }
+    };
+  })();
+
+  function addTweet(t){
+    const code = toSentimentCode(t.sentiment_text ?? t.sentiment ?? t.sentiment_label);
+    if (code == null) return;
+    const ts  = t.timestamp || t.created_at || Date.now();
+    const row = {
+      ids: t.ids || t.id || t.tweet_id || '',
+      text: t.text || '',
+      clean_text: t.clean_text || t.processed_text || '',
+      source: t.source || 'ws',
+      origin: String(t.origin ?? 'unknown').toLowerCase(),
+      category: String(t.category ?? 'NORMAL').toUpperCase(),
+      lang: (t.lang ?? t.lang_out ?? t.lang_in ?? t.language ?? 'unknown'),
+      lang_name: t.langName || t.lang_name || undefined,
+      sentiment_label: toSentimentCode(t.sentiment ?? t.sentiment_label),
+      sentiment: codeToText(toSentimentCode(t.sentiment ?? t.sentiment_label)),
+       timestamp: t.ts || t.timestamp || t.created_at || Date.now()
+    };
+    if (row.ids && seenIds.has(row.ids)) return;
+    if (row.ids) seenIds.add(row.ids);
+
+    tweetCache.unshift(row);
+    _updateLiveCountersUI();
+    onTweetForTrend(t);
+    applyLiveFilters();
+    scheduleChartsUpdate();
+  }
+
+  // ===== boot =====
+  document.addEventListener('DOMContentLoaded', ()=>{
+    updateSentimentMix(0,0,0);
+    seedFromAPI();
+  });
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

@@ -1,0 +1,12 @@
+<!-- templates/dashboard_frontend/new.html -->
+{% extends "dashboard_frontend/base.html" %}
+{% block title %}New – Realtime Sentiment{% endblock %}
+
+{% block content %}
+<div class="pt-5 px-4">
+  <h1 class="mb-3">Newest Tweets</h1>
+  <p class="text-muted">Sorted by most recent</p>
+
+  {% include "dashboard_frontend/partials/tweet_table.html" %}
+</div>
+{% endblock %}

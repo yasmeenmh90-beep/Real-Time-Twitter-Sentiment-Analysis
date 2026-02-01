@@ -1,0 +1,11 @@
+<!-- templates/dashboard_frontend/trending.html -->
+{% extends "dashboard_frontend/base.html" %}
+{% block title %}Trending – Realtime Sentiment{% endblock %}
+
+{% block content %}
+<div class="pt-5 px-4">
+  <h1 class="mb-3">Trending Tweets</h1>
+
+  {% include "dashboard_frontend/partials/tweet_table.html" %}
+</div>
+{% endblock %}

@@ -1,0 +1,295 @@
+{% load static %}
+
+<html lang="en">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>{% block title %}Realtime Sentiment{% endblock %}</title>
+
+  <!-- Bootstrap & icons -->
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" rel="stylesheet">
+
+  <!-- Chart.js (+ word-cloud controller) -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chartjs-chart-wordcloud@4.0.0/dist/chartjs-chart-wordcloud.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+  <!-- ── Custom Styles ─────────────────────────────── -->
+  <style>
+    :root { --pos:#14b157; --neu:#6c757d; --neg:#e03131; --rate:#0dcaf0; }
+    body { background:#f8fafc; }
+    .kpi .val { font-size:2rem; font-weight:600; }
+
+    .sidebar {
+      width:260px;
+      background:linear-gradient(180deg,#6c757d 0%,#343a40 100%);
+      color:#f8f9fa;
+      position:fixed; inset:0 auto 0 0;
+      z-index:1030;
+      box-shadow:2px 0 6px rgba(0,0,0,.2);
+      backdrop-filter:saturate(180%) blur(6px);
+      transition:transform .35s ease;
+    }
+
+    @media (max-width:991.98px){
+      .sidebar { transform:translateX(-105%); }
+      .sidebar.show { transform:none; }
+    }
+
+    .sidebar .brand {
+      font-weight:700; font-size:1.15rem;
+      letter-spacing:.3px;
+      display:block; padding:1.15rem 1.5rem .9rem;
+    }
+
+    .sidebar .nav-link {
+      display:flex; align-items:center;
+      gap:.75rem;
+      color:#f1f1f1;
+      padding:.7rem 1.25rem .7rem 1.5rem;
+      border-radius:.45rem 0 0 .45rem;
+      position:relative;
+      transition:background .25s ease-out;
+    }
+
+    .sidebar .nav-link::before {
+      content:"";
+      position:absolute; left:0; top:0;
+      width:4px; height:100%;
+      background:#fff;
+      border-radius:0 4px 4px 0;
+      opacity:0; transform:scaleY(.1);
+      transition:opacity .25s,transform .25s;
+    }
+
+    .sidebar .nav-link:hover,
+    .sidebar .nav-link.active {
+      background-color: rgba(255, 255, 255, 0.1);
+    }
+
+    .sidebar .nav-link:hover::before,
+    .sidebar .nav-link.active::before {
+      opacity:1; transform:scaleY(1);
+    }
+
+    .sidebar .nav-link i { font-size:1.05rem; }
+
+.btn-outline-dark.active {
+  background-color: #343a40;
+  color: #fff;
+}
+
+     /* Ensure content starts after sidebar */
+  .main-content {
+    margin-left: 250px; /* Match sidebar width */
+    transition: margin-left 0.3s ease-in-out;
+  }
+
+  /* When sidebar is hidden (on mobile), remove margin */
+  .sidebar.show + .main-content {
+    margin-left: 0;
+  }
+
+  @media (max-width: 991px) {
+    .main-content {
+      margin-left: 0; /* No margin on small screens */
+    }
+  }
+
+    .topbar {
+  height: 48px;
+  background: #ffffffee;
+  position: fixed;
+  inset: 0 0 auto 0;
+  z-index: 1025;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0 1.5rem;
+  border-bottom: 1px solid #dee2e6;
+  backdrop-filter: saturate(180%) blur(6px);
+  font-weight: 600;
+  font-size: .95rem;
+}
+
+
+    .topbar span { white-space:nowrap; }
+
+    body.dark-mode {
+      background-color: #1e1e1e;
+      color: #f8f9fa;
+    }
+
+    body.dark-mode .card,
+    body.dark-mode .table {
+      background-color: #2c2c2c;
+      color: #f8f9fa;
+    }
+
+    body.dark-mode .table th {
+      background-color: #444;
+    }
+
+    body.dark-mode .text-bg-success,
+    body.dark-mode .text-bg-danger,
+    body.dark-mode .text-bg-secondary {
+      color: #fff !important;
+    }
+
+    body.dark-mode .form-check-input:checked {
+  background-color: #0dcaf0;
+  border-color: #0dcaf0;
+}
+
+    td img.rounded-circle {
+  vertical-align: middle;
+}
+
+/* Floating timeline selector (Twitter-like) */
+.timeline-overlay{
+  position:fixed; inset:0; background:rgba(0,0,0,.45);
+  display:flex; align-items:center; justify-content:center;
+  z-index:2000; backdrop-filter: blur(2px);
+}
+.timeline-box{
+  width: 360px; max-width:90%;
+  background:#fff; color:#111; border-radius:18px;
+  box-shadow:0 20px 40px rgba(0,0,0,.2);
+  padding:22px 20px 10px;
+}
+body.dark-mode .timeline-box{
+  background:#2c2c2c; color:#f8f9fa;
+}
+.timeline-row{
+  display:flex; align-items:center; justify-content:space-between;
+  padding:12px 4px; border-radius:8px; cursor:pointer;
+}
+.timeline-row:hover{
+  background:rgba(0,0,0,.04);
+}
+body.dark-mode .timeline-row:hover{
+  background:rgba(255,255,255,.06);
+}
+.timeline-left{
+  display:flex; align-items:center; gap:.65rem;
+  font-size:1.05rem;
+}
+.timeline-check{
+  width:24px; height:24px; border-radius:50%;
+  border:2px solid #c0c7d0; display:flex; align-items:center; justify-content:center;
+}
+.timeline-check.active{
+  background:#0d6efd; border-color:#0d6efd; color:#fff;
+}
+
+
+
+  </style>
+</head>
+<script src="https://cdn.jsdelivr.net/npm/countup.js@2.6.2/dist/countUp.umd.js"></script>
+
+<body>
+
+  <!-- ╭───── SIDEBAR ─────╮ -->
+  <nav id="appSidebar" class="sidebar d-flex flex-column">
+    <span class="brand">Realtime&nbsp;Dashboard</span>
+
+    <ul class="nav flex-column mb-auto">
+      <li>
+        <a class="nav-link {% if request.resolver_match.url_name == 'home' %}active{% endif %}"
+           href="{% url 'dashboard_frontend:home' %}">
+           <i class="bi bi-speedometer2"></i>Dashboard
+        </a>
+      </li>
+
+      <li>
+        <a class="nav-link {% if request.resolver_match.url_name == 'history' %}active{% endif %}"
+           href="{% url 'dashboard_frontend:history' %}">
+           <i class="bi bi-clock-history"></i>History
+        </a>
+      </li>
+
+    </ul>
+
+    <div class="px-3 pb-3">
+      <label for="datePicker" class="form-label">Pick Date</label>
+      <input type="date" id="datePicker" class="form-control"
+             onchange="window.location.href = `/history?date=${this.value}`;">
+    </div>
+
+    <div class="mt-auto small p-3 text-center opacity-75">
+      Django {{ django_version }}
+    </div>
+  </nav>
+  <!-- ╰──────────────────╯ -->
+
+<!-- ╭── TOPBAR (aligned left and right with icon) ─────╮ -->
+<div class="topbar d-flex justify-content-between align-items-center px-4 py-2 border-bottom bg-white shadow-sm">
+  <span class="fw-semibold">Realtime Twitter Sentiment</span>
+  <div class="d-flex gap-2 align-items-center">
+    <div id="ws-status" class="badge bg-secondary" title="Shows WebSocket stream status">Connecting...</div>
+    <button id="darkToggleBtn" class="btn btn-outline-secondary btn-sm rounded-circle" title="Toggle Dark Mode">
+      <i id="darkIcon" class="bi bi-moon-fill"></i>
+    </button>
+  </div>
+</div>
+
+
+
+
+
+
+
+
+
+  <!-- ╭── TOGGLE BUTTON FOR MOBILE ──────────────────────╮ -->
+  <button class="btn btn-primary position-fixed d-lg-none" style="top:1rem;left:1rem;z-index:1040"
+          id="sidebarToggle"><i class="bi bi-list fs-3"></i></button>
+
+  <!-- ╭── MAIN CONTENT ──────────────────────────────────╮ -->
+  <main class="main-content container-fluid py-4">
+    {% block content %}{% endblock %}
+  </main>
+
+  <footer class="text-center text-muted small py-4">
+    Built with Django {{ django_version }} · Bootstrap 5 · Chart.js
+  </footer>
+
+  <!-- ╭── SCRIPTS ───────────────────────────────────────╮ -->
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+  <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+
+  <!-- Sidebar toggle JS -->
+  <script>
+    const sb = document.getElementById('appSidebar');
+    document.getElementById('sidebarToggle').addEventListener('click',()=>sb.classList.toggle('show'));
+  </script>
+
+  {% block extra_js %}{% endblock %}
+
+  <!-- Dark Mode Toggle Logic -->
+  <script>
+  const body = document.body;
+  const toggleBtn = document.getElementById("darkToggleBtn");
+  const darkIcon = document.getElementById("darkIcon");
+
+  // Set initial mode from localStorage
+  if (localStorage.getItem("darkMode") === "true") {
+    body.classList.add("dark-mode");
+    darkIcon.classList.replace("bi-moon-fill", "bi-sun-fill");
+  }
+
+  toggleBtn.addEventListener("click", () => {
+    body.classList.toggle("dark-mode");
+    const isDark = body.classList.contains("dark-mode");
+    localStorage.setItem("darkMode", isDark);
+    darkIcon.classList.toggle("bi-moon-fill", !isDark);
+    darkIcon.classList.toggle("bi-sun-fill", isDark);
+  });
+</script>
+
+
+
+</body>
+</html>
