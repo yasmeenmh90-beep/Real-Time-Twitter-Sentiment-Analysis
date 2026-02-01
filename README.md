@@ -10,6 +10,14 @@ University of West London
 ## Project Overview
 This research project designs and implements an end-to-end real-time sentiment analysis pipeline deployed on AWS EC2. The system integrates data ingestion, processing, storage, machine learning models, and visualization components in a scalable architecture.
 
+## Project features
+• Real-time tweet ingestion using Kafka
+• Spark streaming sentiment scoring
+• MongoDB storage
+• Django live dashboard
+• Forecasting & analytics
+
+
 ## System Architecture
 The pipeline consists of the following components:
 - Twitter/X Scraper (Playwright)
