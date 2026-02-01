@@ -22,7 +22,7 @@ The pipeline consists of the following components:
 ## Real-Time Dashboard Demo
 
 ### Live Sentiment KPIs
-![Dashboard Main](docs/screenshots/Dashboard_main.png)
+![System Artitecture](artitecture.png)
 
 ### Live Tweet Streaming Table
 ![Live Tweets](docs/screenshots/Live_Tweets.png)
