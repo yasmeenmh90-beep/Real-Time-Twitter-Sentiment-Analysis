@@ -1,0 +1,53 @@
+# Core
+Django==5.2.4
+djangorestframework==3.16.0
+asgiref==3.8.1
+sqlparse==0.5.3
+django-cors-headers==4.7.0
+gunicorn
+redis
+# Real-time Websockets
+channels==4.1.0
+channels-redis==4.2.0
+daphne==4.2.1
+
+# Streaming / ML Stack
+kafka-python==2.2.14
+aiokafka==0.12.0
+pyspark==3.5.1
+scikit-learn==1.7.0
+xgboost==3.0.3
+
+sentence-transformers==5.0.0
+tweepy==4.16.0
+playwright==1.53.0
+
+
+# NLP + Embedding Support
+tokenizers==0.21.4
+safetensors==0.5.3
+regex==2025.7.34
+langdetect==1.0.9
+
+# MongoDB
+pymongo==4.13.2
+
+# Utilities
+numpy==1.26.4
+pandas==2.3.1
+python-dateutil==2.9.0.post0
+nltk>=3.9.1,<4.0
+joblib>=1.5.1,<2.0
+
+# Other scientific/ML libs
+scipy==1.15.3
+databases==0.9.0
+uvicorn==0.35.0
+pycparser==2.22
+dashboard==0.0.6
+tensorflow==2.15.0
+torch==2.7.1
+transformers==4.52.1
+sentence-transformers==5.0.0
+
+
