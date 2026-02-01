@@ -25,7 +25,7 @@ The pipeline consists of the following components:
 
 ### Live Sentiment KPIs
 
-![Dashboard Main](Dashboard1_main.png)
+![Dashboard Main](docs/screenshots/Dashboard1_main.png)
 
 ### Live Tweet Streaming Table
 ![Live Tweets](Live_Tweets.png)
